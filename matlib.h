@@ -86,26 +86,23 @@ Matrix sequenceMatrix(int height, int width){
 	}
 	return initMatrix(width, height, elements);
 }
-Matrix matAdd(const Matrix a, const Matrix b){
+Matrix matAdd(const Matrix a, const Matrix b, bool multithread){
 	if(a.height != b.height || a.width != b.width){
 		printf("Unable to add a: %ix%i with b: %ix%i\n", a.height, a.width, b.height, b.width);
 	}
 	float *elements = (float*) malloc(sizeof(float)*a.height*a.width);
-	for(int i = 0; i<a.height; i++){
-		for(int j = 0; j<a.width; j++){
+	Matrix c = {.height = a.height, .width = a.width, .elements = elements};
+	if(!multithread)
+	for(int i = 0; i<a.height; i++)
+		for(int j = 0; j<a.width; j++)
 			elements[i*a.width + j] = a.elements[i*a.width+ j] + b.elements[i*a.width+ j];
-		}
+	else{
+		int cores = sysconf(_SC_NPROCESSORS_ONLN);
+		ThreadWrapper wrapper = {.a = a, .b =b, .c = c, .threadID = 0};
+		initThreads(cores, addKernel, &wrapper);
 	}
-	return initMatrix(a.height, a.width, elements);
-}
 
-
-Matrix fasterMatAdd(const Matrix a, const Matrix b){
-	int cores = sysconf(_SC_NPROCESSORS_ONLN);
-	Matrix c = emptyMatrix(a.width, a.height);
-	ThreadWrapper wrapper = {.a = a, .b =b, .c = c, .threadID = 0};
-	initThreads(cores, addKernel, &wrapper);
-	return wrapper.c;
+	return c;
 }
 
 Matrix matMul(Matrix a, Matrix b, bool multithread){
