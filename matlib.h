@@ -3,10 +3,11 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <stdbool.h> 
 pthread_mutex_t lock;
 void *addKernel(void *args);
-void *onesInitKernel(void *args);
-void *scalarMulKernel(void *args);
+void *scalarMatrixInitKernel(void *args);
+void *matmulKernel(void *args);
 typedef struct Matrix{
 	float* elements;
 	int height, width;
@@ -18,10 +19,16 @@ typedef struct ThreadWrapper{
 	int threadID;
 }ThreadWrapper;
 
-typedef struct MatrixInitWrapper{
-	Matrix mat;
-	int threadID;
-}MatrixInitWrapper;
+void initThreads(int threads, void* kernel, void*args){
+	pthread_t tid[threads];
+	if(pthread_mutex_init(&lock, NULL) !=0){
+		printf("mutex init failure\n");
+	}
+	for(int i =0; i<threads; i++)
+		pthread_create(&tid[i], NULL, kernel, args);
+	for(int i =0; i<threads; i++)
+		pthread_join(tid[i], NULL);
+}
 
 float* matrixPointer(Matrix mat, int x, int y){
 	return &mat.elements[y*mat.width + x];
@@ -38,7 +45,11 @@ void freeMatrix(Matrix mat){
 }
 Matrix zeroMatrix(int height, int width){
 	float *elements = (float*) calloc(width*height, sizeof(float));
-	return initMatrix(width, height, elements);
+	return initMatrix(height, width, elements);
+}
+Matrix emptyMatrix(int height, int width){
+	float *elements = (float*) malloc(width*height* sizeof(float));
+	return initMatrix(height, width, elements );
 }
 Matrix identityMatrix(int m){
 	float* elements = (float*) calloc(m*m, sizeof(float));
@@ -48,28 +59,24 @@ Matrix identityMatrix(int m){
 		mat.elements[i*m + i] = 1;
 	return mat;
 }
-Matrix onesMatrix(int height, int width){
+Matrix scalarMatrix(float scalar,int height, int width){
 	int n = width*height;
 	float *elements = (float*) malloc(sizeof(float)*n);
-	Matrix mat = {.elements = elements, .height = height, .width = width};
-	int cores = sysconf(_SC_NPROCESSORS_ONLN);
-	if(n<1000)
+	Matrix c = {.elements = elements, .height = height, .width = width};
+	if(n<10000)
 	for(int i=0; i<n; i++){
-		elements[i] = 1;
+		elements[i] = scalar;
 	}
 	else{
-		MatrixInitWrapper wrapper = {.mat = mat, .threadID = 0};
+		Matrix a = {.elements = &scalar};
+		ThreadWrapper wrapper = {.a = a, .c = c, .threadID = 0};
 		int cores = sysconf(_SC_NPROCESSORS_ONLN);
-		pthread_t tid[cores];
-	if(pthread_mutex_init(&lock, NULL) !=0){
-		printf("mutex init failure\n");
+		initThreads(cores, scalarMatrixInitKernel, &wrapper);
 	}
-		for(int i =0; i<cores; i++)
-			pthread_create(&tid[i], NULL, onesInitKernel, &wrapper);
-		for(int i =0; i<cores; i++)
-			pthread_join(tid[i], NULL);
-	}
-	return initMatrix(width, height, elements);
+	return c;
+}
+Matrix onesMatrix(int height, int width){
+	return scalarMatrix(1.0, height, width);
 }
 Matrix sequenceMatrix(int height, int width){
 	int n = width*height;
@@ -95,35 +102,32 @@ Matrix matAdd(const Matrix a, const Matrix b){
 
 Matrix fasterMatAdd(const Matrix a, const Matrix b){
 	int cores = sysconf(_SC_NPROCESSORS_ONLN);
+	Matrix c = emptyMatrix(a.width, a.height);
 	ThreadWrapper wrapper = {.a = a, .b =b, .c = c, .threadID = 0};
-	Matrix c = zeroMatrix(a.width, a.height);
-	pthread_t tid[cores];
-	if(pthread_mutex_init(&lock, NULL) !=0){
-		printf("mutex init failure\n");
-	}
-	for(int i =0; i<cores; i++)
-		pthread_create(&tid[i], NULL, addKernel, &wrapper);
-	for(int i =0; i<cores; i++)
-		pthread_join(tid[i], NULL);
+	initThreads(cores, addKernel, &wrapper);
 	return wrapper.c;
 }
-Matrix scalarMul(float a, Matrix mat){
-	float* elements = (float*)malloc(sizeof(float)*mat.height*mat.width);
-	Matrix c = {.elements = elements, .height  = mat.height, .width = mat.width};
-	if(mat.height*mat.width > 100000)
-	for(int i = 0; i<mat.height; i++)
-		for(int j = 0; j<mat.width; i++)
-			elements[i*a.width + j] = mat.elements[i*a.width + j]*a;
-	else{
-		Matrix scalarMat = {.elements = &a, .height = 1, .width= 1};
-		Matrix c = {.elements = elements, .height = mat.height, .width = mat.width};
-		ThreadWrapper wrapper = {.threadID = 0, .a = scalarMat, .b = mat, .c = c};
-		int cores = sysconf(_SC_NPROCESSORS_ONLN);
 
+Matrix matMul(Matrix a, Matrix b, bool multithread){
+	if(a.width!=b.height){
+		printf("Unable to multiply a: %ix%i with %ix%i\n", a.height, a.width, b.height, b.width);
+	}
+	float* elements = (float*) malloc(sizeof(float)*a.height*b.width);
+	Matrix c = {.elements = elements, .height = a.height, .width = b.width};
+	if(!multithread)
+	for(int i =0; i<a.height; i++){
+		for(int j = 0; j<b.width; j++)
+			for(int k = 0; k<a.width; k++)
+				elements[i*b.width + j] += a.elements[i*a.width + k]*b.elements[k*b.width + j];
+	}
+	else{
+		int cores = sysconf(_SC_NPROCESSORS_ONLN);
+		ThreadWrapper wrapper = {.a = a, .b = b, .c = c, .threadID = 0};
+		initThreads(cores, matmulKernel, &wrapper);
 
 	}
+	return c;
 }
-
 void *addKernel(void *args){
 	ThreadWrapper *wrapper = (ThreadWrapper*) args;
 
@@ -152,10 +156,34 @@ void *addKernel(void *args){
 		}
     return NULL;
 }
-void *onesInitKernel(void *args){
-	MatrixInitWrapper *wrapper = (MatrixInitWrapper*) args;
+void *matmulKernel(void *args){
+	ThreadWrapper *wrapper = (ThreadWrapper*) args;
 	int cores = sysconf(_SC_NPROCESSORS_ONLN);
-	int n = (wrapper->mat.width)*(wrapper->mat.height);
+
+	int xStride = (int) wrapper->c.width/cores;
+	int yStride = (int) wrapper->c.height/cores;
+	pthread_mutex_lock(&lock);
+	const int id = wrapper->threadID;
+	++wrapper->threadID;
+	pthread_mutex_unlock(&lock);
+	int xTerminator = xStride*(id + 1);
+	int yTerminator = yStride*(id + 1);
+	if((cores-1) == id){
+		xTerminator += wrapper->c.width%cores;
+		yTerminator += wrapper->c.height%cores;
+	}
+
+	for(int i = yStride*id; i<yTerminator; i++)
+		for(int j = xStride*id;j<xTerminator; j++)
+			for(int k =0; k<wrapper->a.width;k++)
+				wrapper->c.elements[i*wrapper->b.width + j] += wrapper->a.elements[i*wrapper->a.width + k]
+																*wrapper->b.elements[k*wrapper->b.width + j];
+	return NULL;	
+}
+void *scalarMatrixInitKernel(void *args){
+	ThreadWrapper *wrapper = (ThreadWrapper*) args;
+	int cores = sysconf(_SC_NPROCESSORS_ONLN);
+	int n = (wrapper->c.width)*(wrapper->c.height);
 	int stride = (int) (n/cores);
 	int remainder = n%cores;
 
@@ -169,7 +197,7 @@ void *onesInitKernel(void *args){
 		terminator += n%cores;
 
 	for(int i = id*stride; i<terminator; i++)
-		wrapper->mat.elements[i] = 1;
+		wrapper->c.elements[i] = wrapper->a.elements[0];
 	return NULL;
 
 }
