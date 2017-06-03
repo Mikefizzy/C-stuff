@@ -26,12 +26,10 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 			else if(buffer[i] == ',' || buffer[i] == '\n'){
 				if(!hitNew)
 				switch(buffer[i]){
-					case ',':
-					width++;
-					break;
+					case '\n':
+					hitNew = true;
 					case '\n':
 					width++;
-					hitNew = true;
 					break;
 
 				}
