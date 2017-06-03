@@ -51,10 +51,12 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 
 		}
 	}
-	if(nElements>(numIndex+1)){
+	if(nElements>(numIndex)){
 			elements = (float*)realloc(elements, (numIndex+1)*sizeof(float));
 		}
-	int height = (numIndex+1)/width;
+	int height = (numIndex)/width;
+	if((numIndex)%width>0)
+		printf("Matrix loaded is not even, mod %i\n", numIndex%width);
 	Matrix mat = {.elements = elements, .height = height, .width = width};
 	return mat;
 }
