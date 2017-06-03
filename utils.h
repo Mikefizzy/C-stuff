@@ -28,7 +28,7 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 				switch(buffer[i]){
 					case '\n':
 					hitNew = true;
-					case '\n':
+					case ',':
 					width++;
 					break;
 
