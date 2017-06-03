@@ -16,6 +16,7 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 	int numIndex = 0, width = 0,digitIdx = 0 ,nread;
 	bool hitNew = false;
 	float* elements = (float*) malloc(sizeof(float)*nElements);
+
 	while((nread = fread(buffer, 1, bufferSize, file))>0){
 		for(int i =0; i<bufferSize; i++){
 			if(isdigit(buffer[i]) || buffer[i] == '.'){
@@ -35,9 +36,9 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 
 				}
 				numBuffer[digitIdx] = '\0';
-				if(numIndex==nElements){
-					nElements += nElements/2;
-					elements = realloc(elements, sizeof(float)*nElements);
+				if(numIndex>=nElements){
+					nElements += (nElements/2);
+					elements = (float*)realloc(elements, sizeof(float)*nElements);
 				}
 
 				elements[numIndex] = strtof(numBuffer,NULL);
@@ -51,7 +52,7 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 		}
 	}
 	if(nElements>(numIndex+1)){
-			elements = realloc(elements, (numIndex+1));
+			elements = (float*)realloc(elements, (numIndex+1)*sizeof(float));
 		}
 	int height = (numIndex+1)/width;
 	Matrix mat = {.elements = elements, .height = height, .width = width};
