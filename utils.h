@@ -46,10 +46,8 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 				memset(numBuffer, 0, numBufferSize);
 				digitIdx = 0;
 				numIndex++;
-		}else if(buffer[i]!=' '){
+		}else if(buffer[i]!=' ')
 			break;
-		}
-
 		}
 	}
 	if(nElements>(numIndex)){
