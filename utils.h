@@ -20,8 +20,11 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 	while((nread = fread(buffer, 1, bufferSize, file))>0){
 		for(int i =0; i<bufferSize; i++){
 			if(isdigit(buffer[i]) || buffer[i] == '.'){
+				if(digitIdx<numBufferSize){
 				numBuffer[digitIdx] = buffer[i];
 				digitIdx++;
+			}else
+				printf("numBuffer too small!\n");
 			}
 			else if(buffer[i] == ',' || buffer[i] == '\n'){
 				if(!hitNew)
@@ -35,7 +38,7 @@ Matrix loadCsv(FILE* file,int bufferSize,int numBufferSize, int nElements){
 				}
 				numBuffer[digitIdx] = '\0';
 				if(numIndex>=nElements){
-					nElements += (nElements/2);
+					nElements += (int)(nElements/4);
 					elements = (float*)realloc(elements, sizeof(float)*nElements);
 				}
 
