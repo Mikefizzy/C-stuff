@@ -54,7 +54,6 @@ Matrix emptyMatrix(int height, int width){
 Matrix identityMatrix(int m){
 	float* elements = (float*) calloc(m*m, sizeof(float));
 	Matrix mat = initMatrix(m,m, elements);
-	if(m<=1000)
 	for(int i =0; i<m;i++)
 		mat.elements[i*m + i] = 1;
 	return mat;
@@ -63,7 +62,7 @@ Matrix scalarMatrix(float scalar,int height, int width){
 	int n = width*height;
 	float *elements = (float*) malloc(sizeof(float)*n);
 	Matrix c = {.elements = elements, .height = height, .width = width};
-	if(n<10000)
+	if(n<1000000)
 	for(int i=0; i<n; i++){
 		elements[i] = scalar;
 	}
