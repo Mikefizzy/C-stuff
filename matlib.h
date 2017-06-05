@@ -19,7 +19,7 @@ typedef struct ThreadWrapper{
 	int threadID;
 }ThreadWrapper;
 
-void initThreads(int threads, void* kernel, void*args){
+void initThreads(int threads, void *(*kernel)(void *), void*args){
 	pthread_t tid[threads];
 	if(pthread_mutex_init(&lock, NULL) !=0){
 		printf("mutex init failure\n");
@@ -37,7 +37,10 @@ float matrixElement(Matrix mat, int x, int y){
 	return mat.elements[y*mat.width + x];
 }
 Matrix initMatrix(int height, int width, float* elements){
-	Matrix mat = {.height = height, .width = width, .elements = elements};
+	Matrix mat;
+	mat.elements = elements;
+	mat.height = height;
+	mat.width = width;
 	return mat;
 }
 void freeMatrix(Matrix mat){
@@ -61,14 +64,17 @@ Matrix identityMatrix(int m){
 Matrix scalarMatrix(float scalar,int height, int width){
 	int n = width*height;
 	float *elements = (float*) malloc(sizeof(float)*n);
-	Matrix c = {.elements = elements, .height = height, .width = width};
+	Matrix c = initMatrix(height, width, elements);
 	if(n<1000000)
 	for(int i=0; i<n; i++){
 		elements[i] = scalar;
 	}
 	else{
-		Matrix a = {.elements = &scalar};
-		ThreadWrapper wrapper = {.a = a, .c = c, .threadID = 0};
+		Matrix a;
+		a.elements = &scalar;
+		ThreadWrapper wrapper;
+		wrapper.a = a;
+		wrapper.threadID = 0;
 		int cores = sysconf(_SC_NPROCESSORS_ONLN);
 		initThreads(cores, scalarMatrixInitKernel, &wrapper);
 	}
@@ -90,14 +96,17 @@ Matrix matAdd(const Matrix a, const Matrix b, bool multithread){
 		printf("Unable to add a: %ix%i with b: %ix%i\n", a.height, a.width, b.height, b.width);
 	}
 	float *elements = (float*) malloc(sizeof(float)*a.height*a.width);
-	Matrix c = {.height = a.height, .width = a.width, .elements = elements};
+	Matrix c = {elements, a.height, a.width};
 	if(!multithread)
 	for(int i = 0; i<a.height; i++)
 		for(int j = 0; j<a.width; j++)
 			elements[i*a.width + j] = a.elements[i*a.width+ j] + b.elements[i*a.width+ j];
 	else{
 		int cores = sysconf(_SC_NPROCESSORS_ONLN);
-		ThreadWrapper wrapper = {.a = a, .b =b, .c = c, .threadID = 0};
+		ThreadWrapper wrapper;
+		wrapper.a = a;
+		wrapper.b = b;
+		wrapper.threadID = 0;
 		initThreads(cores, addKernel, &wrapper);
 	}
 
@@ -118,7 +127,10 @@ Matrix matMul(Matrix a, Matrix b, bool multithread){
 	}
 	else{
 		int cores = sysconf(_SC_NPROCESSORS_ONLN);
-		ThreadWrapper wrapper = {.a = a, .b = b, .c = c, .threadID = 0};
+		ThreadWrapper wrapper;
+		wrapper.a = a;
+		wrapper.b = b;
+		wrapper.threadID = 0;
 		initThreads(cores, matmulKernel, &wrapper);
 
 	}
@@ -181,7 +193,6 @@ void *scalarMatrixInitKernel(void *args){
 	int cores = sysconf(_SC_NPROCESSORS_ONLN);
 	int n = (wrapper->c.width)*(wrapper->c.height);
 	int stride = (int) (n/cores);
-	int remainder = n%cores;
 
 	pthread_mutex_lock(&lock);
 	const int id = wrapper->threadID;
